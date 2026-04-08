@@ -1,15 +1,14 @@
 import os
 import traceback
 import requests
-import google.generativeai as genai
+from google import genai
 
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 def generate_recipe():
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = genai.Client(api_key=GEMINI_API_KEY)
     prompt = """
 シャープのホットクックまたはヘルシオを使った、今日のおすすめレシピを1つ提案してください。
 
@@ -35,7 +34,10 @@ def generate_recipe():
 
 💡 ポイント：アドバイスを書く
 """
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
     return response.text
 
 def send_line_message(message):
