@@ -1,13 +1,15 @@
 import os
+import traceback
 import requests
-from openai import OpenAI
+import google.generativeai as genai
 
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 def generate_recipe():
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-1.5-flash")
     prompt = """
 シャープのホットクックまたはヘルシオを使った、今日のおすすめレシピを1つ提案してください。
 
@@ -24,21 +26,17 @@ def generate_recipe():
 👨‍👩‍👧 対象：子どもも食べられる
 
 【材料（2〜3人分）】
-・材料1
-・材料2
+・材料を書く
+・材料を書く
 
 【作り方】
-1. 手順1
-2. 手順2
+1. 手順を書く
+2. 手順を書く
 
-💡 ポイント：【一言アドバイス】
+💡 ポイント：アドバイスを書く
 """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=800
-    )
-    return response.choices[0].message.content
+    response = model.generate_content(prompt)
+    return response.text
 
 def send_line_message(message):
     url = "https://api.line.me/v2/bot/message/push"
@@ -52,18 +50,24 @@ def send_line_message(message):
     }
     response = requests.post(url, headers=headers, json=data)
     print(f"LINE送信結果: {response.status_code}")
+    print(f"LINE応答: {response.text}")
     return response.status_code == 200
 
 def main():
     print("レシピ生成中...")
-    recipe = generate_recipe()
-    print(recipe)
-    print("LINE送信中...")
-    success = send_line_message(recipe)
-    if success:
-        print("✅ 送信成功！")
-    else:
-        print("❌ 送信失敗")
+    try:
+        recipe = generate_recipe()
+        print(recipe)
+        print("LINE送信中...")
+        success = send_line_message(recipe)
+        if success:
+            print("✅ 送信成功！")
+        else:
+            raise Exception("LINE送信失敗")
+    except Exception as e:
+        print(f"エラー: {e}")
+        traceback.print_exc()
+        raise
 
 if __name__ == "__main__":
     main()
