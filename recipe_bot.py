@@ -8,8 +8,8 @@ LINE_USER_ID = os.environ.get("LINE_USER_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 MODELS = [
-    "gemini-1.5-flash",
     "gemini-2.0-flash",
+    "gemini-2.5-flash-preview-04-17",
     "gemini-2.0-flash-lite",
 ]
 
@@ -50,12 +50,18 @@ def call_gemini(model):
             return data["candidates"][0]["content"]["parts"][0]["text"]
         if response.status_code == 429:
             if attempt < 2:
-                wait = 15 * (attempt + 1)
+                wait = 20 * (attempt + 1)
                 print(f"レート制限。{wait}秒待機...")
                 time.sleep(wait)
-            continue
-        print(f"エラー応答: {response.text}")
-        raise Exception(f"Gemini API error: {response.status_code}")
+            else:
+                print(f"{model} クォータ超過。次のモデルへ...")
+                return None
+        elif response.status_code == 404:
+            print(f"{model} は利用不可。次のモデルへ...")
+            return None
+        else:
+            print(f"エラー応答: {response.text}")
+            raise Exception(f"Gemini API error: {response.status_code}")
     return None
 
 def generate_recipe():
@@ -63,8 +69,7 @@ def generate_recipe():
         result = call_gemini(model)
         if result:
             return result
-        print(f"{model} はクォータ超過。次のモデルへ...")
-    raise Exception("全モデルのクォータが超過しています")
+    raise Exception("全モデルが利用できません（クォータ超過または利用不可）")
 
 def send_line_message(message):
     url = "https://api.line.me/v2/bot/message/push"
