@@ -7,6 +7,7 @@ LINE_TOKEN = os.environ.get("LINE_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 PROMPT = """
 シャープのホットクックまたはヘルシオを使った、今日のおすすめレシピを2つ提案してください。
@@ -54,6 +55,24 @@ GEMINI_MODELS = [
     "gemini-2.0-flash-lite",
 ]
 
+def generate_recipe_groq():
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GROQ_API_KEY}"
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": PROMPT}],
+        "max_tokens": 1500
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    print(f"Groq status: {response.status_code}")
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    print(f"Groq error: {response.text}")
+    return None
+
 def generate_recipe_openai():
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
@@ -98,12 +117,17 @@ def call_gemini(model):
     return None
 
 def generate_recipe():
-    # OpenAIを最初に試す
+    # Groqを最初に試す（無料・高速）
+    if GROQ_API_KEY:
+        result = generate_recipe_groq()
+        if result:
+            return result
+    # OpenAIをフォールバック
     if OPENAI_API_KEY:
         result = generate_recipe_openai()
         if result:
             return result
-    # GeminiをフォールバックとしてGemini
+    # Geminiをフォールバック
     for model in GEMINI_MODELS:
         result = call_gemini(model)
         if result:
