@@ -6,12 +6,7 @@ import requests
 LINE_TOKEN = os.environ.get("LINE_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-MODELS = [
-    "gemini-2.0-flash",
-    "gemini-2.5-flash-preview-04-17",
-    "gemini-2.0-flash-lite",
-]
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 PROMPT = """
 シャープのホットクックまたはヘルシオを使った、今日のおすすめレシピを1つ提案してください。
@@ -39,6 +34,29 @@ PROMPT = """
 💡 ポイント：アドバイスを書く
 """
 
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
+
+def generate_recipe_openai():
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {OPENAI_API_KEY}"
+    }
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": PROMPT}],
+        "max_tokens": 1000
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    print(f"OpenAI status: {response.status_code}")
+    if response.status_code == 200:
+        return response.json()["choices"][0]["message"]["content"]
+    print(f"OpenAI error: {response.text}")
+    return None
+
 def call_gemini(model):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": PROMPT}]}]}
@@ -54,22 +72,28 @@ def call_gemini(model):
                 print(f"レート制限。{wait}秒待機...")
                 time.sleep(wait)
             else:
-                print(f"{model} クォータ超過。次のモデルへ...")
+                print(f"{model} クォータ超過。次へ...")
                 return None
         elif response.status_code == 404:
-            print(f"{model} は利用不可。次のモデルへ...")
+            print(f"{model} は利用不可。次へ...")
             return None
         else:
             print(f"エラー応答: {response.text}")
-            raise Exception(f"Gemini API error: {response.status_code}")
+            return None
     return None
 
 def generate_recipe():
-    for model in MODELS:
+    # OpenAIを最初に試す
+    if OPENAI_API_KEY:
+        result = generate_recipe_openai()
+        if result:
+            return result
+    # GeminiをフォールバックとしてGemini
+    for model in GEMINI_MODELS:
         result = call_gemini(model)
         if result:
             return result
-    raise Exception("全モデルが利用できません（クォータ超過または利用不可）")
+    raise Exception("全AIサービスが利用できません")
 
 def send_line_message(message):
     url = "https://api.line.me/v2/bot/message/push"
