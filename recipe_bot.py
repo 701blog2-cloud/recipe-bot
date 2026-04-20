@@ -1,4 +1,5 @@
 import os
+import time
 import traceback
 import requests
 
@@ -6,9 +7,13 @@ LINE_TOKEN = os.environ.get("LINE_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-def generate_recipe():
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={GEMINI_API_KEY}"
-    prompt = """
+MODELS = [
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
+
+PROMPT = """
 シャープのホットクックまたはヘルシオを使った、今日のおすすめレシピを1つ提案してください。
 
 条件：
@@ -33,16 +38,33 @@ def generate_recipe():
 
 💡 ポイント：アドバイスを書く
 """
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
-    }
-    response = requests.post(url, json=payload)
-    print(f"Gemini API status: {response.status_code}")
-    if response.status_code != 200:
-        print(f"Gemini API error: {response.text}")
+
+def call_gemini(model):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+    payload = {"contents": [{"parts": [{"text": PROMPT}]}]}
+    for attempt in range(3):
+        response = requests.post(url, json=payload)
+        print(f"Gemini [{model}] attempt {attempt+1}: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        if response.status_code == 429:
+            if attempt < 2:
+                wait = 15 * (attempt + 1)
+                print(f"レート制限。{wait}秒待機...")
+                time.sleep(wait)
+            continue
+        print(f"エラー応答: {response.text}")
         raise Exception(f"Gemini API error: {response.status_code}")
-    data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    return None
+
+def generate_recipe():
+    for model in MODELS:
+        result = call_gemini(model)
+        if result:
+            return result
+        print(f"{model} はクォータ超過。次のモデルへ...")
+    raise Exception("全モデルのクォータが超過しています")
 
 def send_line_message(message):
     url = "https://api.line.me/v2/bot/message/push"
